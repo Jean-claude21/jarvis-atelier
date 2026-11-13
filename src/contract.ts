@@ -19,6 +19,14 @@ export const jarvisWorkSchema = z.object({
   token: z.string().min(1).max(200),
   url: z.string().url(),
   until: z.string().optional(),
+  /** Where she wants what is found (her rule's `save`): it wins over the service's own `writes`. */
+  save: z
+    .object({
+      kind: z.string().min(1).max(80),
+      match: z.string().min(1).max(60).optional(),
+      title: z.string().min(1).max(300).optional(),
+    })
+    .optional(),
 });
 export type JarvisWork = z.infer<typeof jarvisWorkSchema>;
 

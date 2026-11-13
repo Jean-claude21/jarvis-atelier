@@ -99,7 +99,12 @@ describe('the Atelier', () => {
           contrat: 'Stage',
         },
       ],
-      jarvis: { execution: 'ent_exe', token: 'jos_work', url: 'https://jarvis.test/api' },
+      jarvis: {
+        execution: 'ent_exe',
+        token: 'jos_work',
+        url: 'https://jarvis.test/api',
+        save: { kind: 'Offre de stage', match: 'url' },
+      },
     });
     expect(answer.status).toBe(202);
     const { job } = (await answer.json()) as { job: string };
@@ -112,7 +117,11 @@ describe('the Atelier', () => {
       'https://jarvis.test/api/executions/ent_exe',
     ]);
     expect(toJarvis.every((one) => one.auth === 'Bearer jos_work')).toBe(true);
-    expect(toJarvis[0]!.body).toMatchObject({ kind: 'Offre', match: 'url', execution: 'ent_exe' });
+    expect(toJarvis[0]!.body).toMatchObject({
+      kind: 'Offre de stage',
+      match: 'url',
+      execution: 'ent_exe',
+    });
     expect(toJarvis[1]!.body).toMatchObject({ status: 'done', counts: { found: 2, created: 2 } });
     expect(world.asked[0]!.body).toMatchObject({
       query: 'stage intelligence artificielle',

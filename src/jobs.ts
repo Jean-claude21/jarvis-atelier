@@ -52,14 +52,16 @@ export async function answerJarvis(
     return;
   }
   let counts: Record<string, number> = { found: outcome.items.length };
-  if (service.writes && outcome.items.length) {
+  // Her rule says where it goes; the service's own idea only when it says nothing.
+  const writes = work.save ?? service.writes;
+  if (writes && outcome.items.length) {
     // Jarvis takes 200 at a time.
     for (let at = 0; at < outcome.items.length; at += 200) {
       const got = await post('/receive', {
-        kind: service.writes.kind,
+        kind: writes.kind,
         items: outcome.items.slice(at, at + 200),
-        ...(service.writes.match ? { match: service.writes.match } : {}),
-        ...(service.writes.title ? { title: service.writes.title } : {}),
+        ...(writes.match ? { match: writes.match } : {}),
+        ...(writes.title ? { title: writes.title } : {}),
         execution: work.execution,
       });
       for (const name of ['created', 'updated', 'skipped'])
