@@ -124,6 +124,12 @@ export function jobQueue(context: () => Omit<Context, 'signal'>) {
             job.error = `Not delivered to Jarvis: ${(error as Error).message}`;
           }
           job.endedAt = new Date().toISOString();
+          // One line per job, never its content or its token.
+          console.info(
+            `[job] ${job.id} ${job.service} ${job.state}` +
+              (job.count !== undefined ? ` ${job.count} found` : '') +
+              (job.error ? ` — ${job.error}` : ''),
+          );
           resolve();
         });
         next();
