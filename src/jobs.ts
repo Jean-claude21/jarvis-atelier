@@ -40,7 +40,11 @@ export async function answerJarvis(
       headers,
       body: JSON.stringify(body),
     });
-    if (!answer.ok) throw new Error(`Jarvis answered ${answer.status} on ${path}.`);
+    if (!answer.ok) {
+      // Its own words, a few: what to fix (never the token, which is not in them).
+      const said = (await answer.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+      throw new Error(`Jarvis answered ${answer.status} on ${path}: ${said}`);
+    }
     return answer.json() as Promise<Record<string, unknown>>;
   };
   if ('error' in outcome) {
