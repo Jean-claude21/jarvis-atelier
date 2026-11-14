@@ -26,6 +26,13 @@ const contractOf = (text: unknown): Contract | undefined => {
   return undefined;
 };
 
+/** A date as a day (« 2026-10-30 »), however the source wrote it. */
+export const dayOf = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? null : new Date(time).toISOString().slice(0, 10);
+};
+
 const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
 const fold = (one: string) => one.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const SMALL = new Set(['les', 'des', 'une', 'pour', 'dans', 'avec', 'and', 'the', 'stage', 'h/f']);
@@ -278,7 +285,13 @@ export const offresEmploi = service({
         for (const one of found) {
           if (items.has(one.url)) continue;
           const { score, reasons } = scoreOf(one, search);
-          items.set(one.url, { ...one, score, reasons: reasons.join(' · '), search: search.query });
+          items.set(one.url, {
+            ...one,
+            published: dayOf(one.published),
+            score,
+            reasons: reasons.join(' · '),
+            search: search.query,
+          });
         }
         said.push(`« ${search.query} » (${search.location}, ${source}): ${found.length}`);
       }
