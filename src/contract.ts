@@ -15,7 +15,7 @@ export interface Writes {
   /** Where raw items go (no fields extracted): « Capture » by default. */
   raw?: string;
   /** A field whose value finds the entry already there (« url »): never twice. */
-  match?: string;
+  match?: string | string[];
   /** Each entry's title: « {title} — {company} ». */
   title?: string;
 }
@@ -47,7 +47,9 @@ export const jarvisWorkSchema = z.object({
   save: z
     .object({
       kind: z.string().min(1).max(80),
-      match: z.string().min(1).max(60).optional(),
+      match: z
+        .union([z.string().min(1).max(60), z.array(z.string().min(1).max(60)).min(1).max(3)])
+        .optional(),
       title: z.string().min(1).max(300).optional(),
       /** Where what could not be structured goes, as read (« Capture »). */
       raw: z.string().min(1).max(80).optional(),

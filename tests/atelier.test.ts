@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { makeApp } from '../src/app';
 import { SERVICES } from '../src/services';
-import { fill, sameOf } from '../src/services/parcourir';
+import { fill, sameOf, typesOf } from '../src/services/parcourir';
+import { townOf } from '../src/place';
 import { pertinence, readable, textOf } from '../src/web';
 
 // The Atelier from outside: its catalogue of generic gestures, a key needed for work, a search, a
@@ -41,6 +42,15 @@ function fakeWorld() {
               { title: 'Stage IA', url: '/offre/1', company: 'Exemple', when: '2026-11-12' },
               { title: 'Stage comptable', url: '/offre/2', company: 'Autre' },
             ]),
+          },
+        ],
+      });
+    if (url.startsWith('https://data.geopf.fr/'))
+      return Response.json({
+        features: [
+          {
+            geometry: { coordinates: [1.09, 49.44] },
+            properties: { label: 'Rouen', context: '76, Seine-Maritime, Normandie', score: 0.9 },
           },
         ],
       });
@@ -111,7 +121,7 @@ describe('the Atelier', () => {
     const { services } = (await (await app.request('/catalog')).json()) as {
       services: { name: string; does: string; examples: string[]; ready: boolean }[];
     };
-    expect(services.map((one) => one.name)).toEqual(['chercher', 'parcourir', 'pdf']);
+    expect(services.map((one) => one.name)).toEqual(['chercher', 'parcourir', 'pdf', 'situer']);
     expect(services.every((one) => one.does && one.examples.length && one.ready)).toBe(true);
   });
 
@@ -164,8 +174,10 @@ describe('the Atelier', () => {
           poste: 'stage intelligence artificielle',
           lieu: 'Rouen',
           mots: 'intelligence artificielle|IA|machine learning',
+          types: 'stage: stage|stagiaire\nalternance: alternance|alternant',
         },
       ],
+      situer: 'company',
       jarvis: work({ kind: 'JobOffer', match: 'url', title: '{title} — {company}' }),
     });
     expect(answer.status).toBe(202);
@@ -190,6 +202,9 @@ describe('the Atelier', () => {
       published: '2026-11-12',
       source: 'jobs.example.com',
       score: 100,
+      empreinte: 'stage ia|exemple',
+      type: 'stage',
+      position: { lat: 49.44, lng: 1.09, address: 'Rouen, 76, Seine-Maritime, Normandie' },
     });
     expect(sent.items.map((one) => one.title)).toEqual([
       'Stage IA',
@@ -247,7 +262,7 @@ describe('the Atelier', () => {
     const { app } = atelier(fakeWorld().fake);
     const listed = await call(app, '/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' });
     const { result } = (await listed.json()) as { result: { tools: { name: string }[] } };
-    expect(result.tools.map((one) => one.name)).toEqual(['chercher', 'parcourir', 'pdf']);
+    expect(result.tools.map((one) => one.name)).toEqual(['chercher', 'parcourir', 'pdf', 'situer']);
   });
 
   it('knows the same offer on several sites', () => {
@@ -257,6 +272,27 @@ describe('the Atelier', () => {
     );
     expect(sameOf(one('Stage IA', 'Altereo'))).not.toBe(sameOf(one('Stage IA', 'Orange')));
     expect(sameOf({ title: 'Une page', source: 's' })).toBeNull();
+  });
+
+  it('reads her types and the town a place names', () => {
+    expect(typesOf('stage: stage|stagiaire|intern\nalternance: alternance|alternant')).toEqual([
+      ['stage', 'stage|stagiaire|intern'],
+      ['alternance', 'alternance|alternant'],
+    ]);
+    expect(townOf('Palaiseau(à 18 km de Paris)')).toBe('Palaiseau');
+    expect(townOf('Paris, Île-de-France, France')).toBe('Paris');
+    expect(townOf('76 - ST MARTIN DU VIVIER')).toBe('ST MARTIN DU VIVIER');
+  });
+
+  it('places towns on a map', async () => {
+    const { app } = atelier(fakeWorld().fake);
+    const answer = await call(app, '/jobs/situer', { places: ['Rouen (76)'] });
+    const { items } = (await answer.json()) as { items: { fields: { position: unknown } }[] };
+    expect(items[0]!.fields.position).toEqual({
+      lat: 49.44,
+      lng: 1.09,
+      address: 'Rouen, 76, Seine-Maritime, Normandie',
+    });
   });
 
   it('fills a recipe, scores her words, reads only public https pages', () => {

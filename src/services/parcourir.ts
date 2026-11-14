@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { service, type Context, type Item } from '../contract';
+import { positionOf, type Position } from '../place';
 import { fold, hostOf, MAX_BYTES, pertinence, readable, textOf, wordsOf } from '../web';
 
 // Reading sites by a recipe. The AI writes the recipe once, from what it understood of a site; this
@@ -255,6 +256,14 @@ async function readOne(
   ];
 }
 
+/** Her types, one per line: « stage: stage|stagiaire|intern » → [name, forms]. */
+export function typesOf(value: unknown): [string, string][] {
+  return (typeof value === 'string' ? value.split(/\n+/) : [])
+    .map((line) => line.split(':'))
+    .filter((parts) => parts.length >= 2 && parts[0]!.trim() && parts.slice(1).join(':').trim())
+    .map((parts) => [parts[0]!.trim(), parts.slice(1).join(':').trim()]);
+}
+
 /** What tells one offer from another whatever the site: its title's words and its company's first. */
 export function sameOf(one: Item): string | null {
   const company = typeof one.fields?.company === 'string' ? one.fields.company : '';
@@ -290,6 +299,8 @@ export const parcourir = service({
     words: z.array(z.string().min(1).max(200)).max(20).optional(),
     /** At most this many items per source and search. */
     limit: z.number().int().min(1).max(100).default(25),
+    /** A field naming a place (« location »): each item gets its `position` for a map. */
+    situer: z.string().trim().min(1).max(60).optional(),
   }),
   writes: { kind: 'Capture', match: 'url', raw: 'Capture' },
   long: true,
@@ -321,6 +332,7 @@ export const parcourir = service({
     const items = new Map<string, Item>();
     const said: string[] = [];
     const seen = new Set<string>();
+    const places = new Map<string, Position | null>();
     let failed = 0;
     for (const { name, recipe } of recipes) {
       for (const search of searches) {
@@ -343,6 +355,20 @@ export const parcourir = service({
           const same = sameOf(one);
           if (items.has(key) || (same && seen.has(same))) continue;
           if (same) seen.add(same);
+          // Its fingerprint, for Jarvis to know it again whatever the site or the day.
+          if (same && one.fields) one.fields.empreinte = same;
+          // Its type, by her search's types (« stage: stage|stagiaire|intern », one per line).
+          const types = typesOf(search.types);
+          if (types.length && one.fields) {
+            const said = [one.title, ...Object.values(one.fields).map(String)].join(' ');
+            const type = types.find(([, forms]) => pertinence(said, [forms]).score > 0);
+            if (type) one.fields.type = type[0];
+          }
+          const place = input.situer ? one.fields?.[input.situer] : undefined;
+          if (typeof place === 'string' && one.fields) {
+            const position = await positionOf(place, context, places);
+            if (position) one.fields.position = position;
+          }
           if (words.length) {
             const said = [
               one.title,
