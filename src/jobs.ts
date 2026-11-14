@@ -44,6 +44,7 @@ export const captureOf = (item: Item): Record<string, unknown> => ({
 });
 const RUNNING_AT_ONCE = 2;
 const ATTEMPTS = 3;
+const GATEWAY = [502, 503, 504];
 /** Waited before a new try: this, then twice this. */
 export const RETRY_MS = { value: 5_000 };
 
@@ -56,11 +57,20 @@ export async function answerJarvis(
 ): Promise<void> {
   const base = work.url.replace(/\/$/, '');
   const headers = { authorization: `Bearer ${work.token}`, 'content-type': 'application/json' };
-  /** A request to Jarvis, tried three times when the network fails (never when Jarvis refuses). */
+  /** A request to Jarvis, tried three times when the network fails or Jarvis is away a moment (never when it refuses). */
   const send = async (path: string, init: RequestInit): Promise<Response> => {
     for (let attempt = 1; ; attempt += 1) {
       try {
-        return await fetcher(`${base}${path}`, { ...init, signal: AbortSignal.timeout(60_000) });
+        const answer = await fetcher(`${base}${path}`, {
+          ...init,
+          signal: AbortSignal.timeout(60_000),
+        });
+        // Jarvis away a moment (restarting, its gateway answering for it): tried again.
+        if (GATEWAY.includes(answer.status) && attempt < ATTEMPTS) {
+          await new Promise((done) => setTimeout(done, RETRY_MS.value * attempt));
+          continue;
+        }
+        return answer;
       } catch (error) {
         const cause = (error as { cause?: { code?: string; message?: string } }).cause;
         const why = `${(error as Error).message}${cause ? ` (${cause.code ?? cause.message})` : ''}`;

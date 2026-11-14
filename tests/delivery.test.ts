@@ -36,6 +36,21 @@ describe('sending to Jarvis', () => {
     ]);
   });
 
+  it('tries again while Jarvis is away a moment, not when it refuses', async () => {
+    const asked: string[] = [];
+    let away = 1;
+    const fake = (async (input: RequestInfo | URL) => {
+      asked.push(String(input));
+      if (String(input).endsWith('/receive') && away-- > 0)
+        return new Response('<html>gateway</html>', { status: 502 });
+      return Response.json({ created: 1 });
+    }) as typeof fetch;
+    await answerJarvis(fake, work, offers, {
+      items: [{ title: 'x', source: 's', url: 'https://ex.com/1', fields: {} }],
+    });
+    expect(asked.filter((one) => one.endsWith('/receive'))).toHaveLength(2);
+  });
+
   it('says why when it never gets through', async () => {
     const { fake } = network(5);
     await expect(
