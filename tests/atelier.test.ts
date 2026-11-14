@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeApp } from '../src/app';
 import { SERVICES } from '../src/services';
-import { fill } from '../src/services/parcourir';
+import { fill, sameOf } from '../src/services/parcourir';
 import { pertinence, readable, textOf } from '../src/web';
 
 // The Atelier from outside: its catalogue of generic gestures, a key needed for work, a search, a
@@ -248,6 +248,15 @@ describe('the Atelier', () => {
     const listed = await call(app, '/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' });
     const { result } = (await listed.json()) as { result: { tools: { name: string }[] } };
     expect(result.tools.map((one) => one.name)).toEqual(['chercher', 'parcourir', 'pdf']);
+  });
+
+  it('knows the same offer on several sites', () => {
+    const one = (title: string, company: string) => ({ title, source: 's', fields: { company } });
+    expect(sameOf(one('Stage - Ingénieur R&D (IA Agentique) H/F', 'Altereo · Rouen'))).toBe(
+      sameOf(one('Stage - Ingénieur R&D IA Agentique H/F', 'ALTEREO')),
+    );
+    expect(sameOf(one('Stage IA', 'Altereo'))).not.toBe(sameOf(one('Stage IA', 'Orange')));
+    expect(sameOf({ title: 'Une page', source: 's' })).toBeNull();
   });
 
   it('fills a recipe, scores her words, reads only public https pages', () => {

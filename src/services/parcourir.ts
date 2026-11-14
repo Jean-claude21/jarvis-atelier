@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { service, type Context, type Item } from '../contract';
-import { hostOf, MAX_BYTES, pertinence, readable, textOf, wordsOf } from '../web';
+import { fold, hostOf, MAX_BYTES, pertinence, readable, textOf, wordsOf } from '../web';
 
 // Reading sites by a recipe. The AI writes the recipe once, from what it understood of a site; this
 // service applies it as often as asked, without AI:
@@ -255,6 +255,18 @@ async function readOne(
   ];
 }
 
+/** What tells one offer from another whatever the site: its title's words and its company's first. */
+export function sameOf(one: Item): string | null {
+  const company = typeof one.fields?.company === 'string' ? one.fields.company : '';
+  const words = (text: string) =>
+    fold(text)
+      .replace(/\b[hfm]\s*\/\s*[hfm]\b/g, ' ')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  const first = words(company).split(' ')[0];
+  return first ? `${words(one.title)}|${first}` : null;
+}
+
 export const parcourir = service({
   name: 'parcourir',
   title: 'Parcourir des sites',
@@ -308,6 +320,7 @@ export const parcourir = service({
     const searches = input.searches?.length ? input.searches : [{}];
     const items = new Map<string, Item>();
     const said: string[] = [];
+    const seen = new Set<string>();
     let failed = 0;
     for (const { name, recipe } of recipes) {
       for (const search of searches) {
@@ -325,7 +338,11 @@ export const parcourir = service({
           : (input.words ?? []);
         for (const one of found) {
           const key = one.url ?? `${one.source}:${one.title}`;
-          if (items.has(key)) continue;
+          // The same offer on several sites (same words of title, same company) is kept once: from
+          // the first source that gave it.
+          const same = sameOf(one);
+          if (items.has(key) || (same && seen.has(same))) continue;
+          if (same) seen.add(same);
           if (words.length) {
             const said = [
               one.title,
