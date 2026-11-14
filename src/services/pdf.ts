@@ -76,7 +76,7 @@ export const pdf = service({
     const bytes = Buffer.from(await answer.arrayBuffer());
     const name = fileNameOf(input.title);
     return {
-      items: [{ title: input.title, name, bytes: bytes.byteLength }],
+      items: [{ title: input.title, source: 'pdf', fields: { name, bytes: bytes.byteLength } }],
       files: [
         {
           name,

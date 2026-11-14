@@ -1,26 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { makeApp } from '../src/app';
-import { textOf, readable } from '../src/services/lire-page';
 import { SERVICES } from '../src/services';
-import { ideasOf, scoreOf } from '../src/services/offres-emploi';
+import { fill } from '../src/services/parcourir';
+import { pertinence, readable, textOf } from '../src/web';
 
-// The Atelier from outside: its catalogue, a key needed for work, work done now, long work sent to
-// Jarvis with its token (a fake Jarvis records what came), and each service as an MCP tool.
+// The Atelier from outside: its catalogue of generic gestures, a key needed for work, a search, a
+// site read by a recipe (raw, structured by a schema, or through treg), long work sent to Jarvis
+// in the one shape every service gives back, a PDF kept as her file, and each service an MCP tool.
 
 const KEY = 'test-key';
-const linkedin = {
-  output: {
-    data: {
-      items: [
-        { title: 'Stage IA', company: 'Exemple', location: 'Rouen', url: 'https://ex.com/1' },
-        { title: 'Stage NLP', company: 'Autre', location: 'Paris', url: 'https://ex.com/2' },
-        { title: 'Doublon', company: 'Exemple', location: 'Rouen', url: 'https://ex.com/1' },
-      ],
-    },
-  },
-};
 
-/** A fetch that answers as treg and as Jarvis would, and remembers what it was asked. */
+/** A fetch that answers as SearXNG, Crawl4AI, treg, Gotenberg, a site and Jarvis would. */
 function fakeWorld() {
   const asked: { url: string; body: unknown; auth: string | null }[] = [];
   const fake = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -31,27 +21,36 @@ function fakeWorld() {
         ? JSON.parse(raw)
         : raw instanceof FormData
           ? Object.fromEntries(['file', 'title', 'links'].map((key) => [key, raw.get(key)]))
-          : raw instanceof URLSearchParams
-            ? Object.fromEntries(raw)
-            : null;
+          : null;
     asked.push({ url, body, auth: new Headers(init?.headers).get('authorization') });
-    if (url.startsWith('https://treg.to/')) return Response.json(linkedin);
-    if (url.startsWith('https://entreprise.francetravail.fr/'))
-      return Response.json({ access_token: 'ft', expires_in: 1500 });
-    if (url.startsWith('https://geo.api.gouv.fr/'))
-      return Response.json([{ codeDepartement: '76' }]);
-    if (url.startsWith('https://api.francetravail.io/'))
+    if (url.startsWith('http://searxng:8080/'))
       return Response.json({
-        resultats: [
+        results: [
+          { url: 'https://www.welcometothejungle.com/fr/jobs', title: 'Offres', content: 'Stages' },
+          { url: 'https://fr.indeed.com/', title: 'Indeed', content: 'Emplois' },
+        ],
+      });
+    if (url === 'http://crawl4ai:11235/crawl')
+      return Response.json({
+        results: [
           {
-            id: '200ABC',
-            intitule: 'Stage Intelligence artificielle',
-            entreprise: { nom: 'Région' },
-            lieuTravail: { libelle: '76 - Rouen' },
-            dateCreation: new Date().toISOString(),
-            typeContratLibelle: 'Stage',
+            success: true,
+            markdown: { raw_markdown: '# Résultats' },
+            metadata: { title: 'Résultats' },
+            extracted_content: JSON.stringify([
+              { title: 'Stage IA', url: '/offre/1', company: 'Exemple', when: '2026-11-12' },
+              { title: 'Stage comptable', url: '/offre/2', company: 'Autre' },
+            ]),
           },
         ],
+      });
+    if (url.startsWith('https://treg.to/'))
+      return Response.json({
+        output: {
+          data: {
+            items: [{ title: 'Stage Machine Learning', company: 'X', url: 'https://ex.com/3' }],
+          },
+        },
       });
     if (url.startsWith('http://gotenberg:3000/'))
       return new Response(new Uint8Array([37, 80, 68, 70]), {
@@ -63,19 +62,22 @@ function fakeWorld() {
     if (url.includes('/executions/')) return Response.json({ ok: true });
     return new Response(
       '<html><title>Une offre</title><body><p>Stage &amp; IA</p><script>x</script></body></html>',
-      {
-        headers: { 'content-type': 'text/html' },
-      },
+      { headers: { 'content-type': 'text/html' } },
     );
   }) as typeof fetch;
   return { asked, fake };
 }
 
-const atelier = (fake: typeof fetch, env: Record<string, string> = {}) =>
+const atelier = (fake: typeof fetch) =>
   makeApp({
     services: SERVICES,
     keys: [KEY],
-    env: { TREG_TOKEN: 'treg', GOTENBERG_URL: 'http://gotenberg:3000', ...env },
+    env: {
+      TREG_TOKEN: 'treg',
+      GOTENBERG_URL: 'http://gotenberg:3000',
+      SEARXNG_URL: 'http://searxng:8080',
+      CRAWL4AI_URL: 'http://crawl4ai:11235',
+    },
     fetch: fake,
   });
 
@@ -90,167 +92,131 @@ const call = (app: ReturnType<typeof atelier>['app'], path: string, body?: unkno
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 
+const until = async (queue: ReturnType<typeof atelier>['queue'], job: string) => {
+  for (let i = 0; i < 100 && !['done', 'failed'].includes(queue.get(job)?.state ?? ''); i++)
+    await new Promise((done) => setTimeout(done, 10));
+  return queue.get(job);
+};
+
+const work = (save: Record<string, string>) => ({
+  execution: 'ent_exe',
+  token: 'jos_work',
+  url: 'https://jarvis.test/api',
+  save,
+});
+
 describe('the Atelier', () => {
-  it('shows its catalogue: each capability in her words, its input and where it writes', async () => {
+  it('shows its gestures, each in her words — never a trade', async () => {
     const { app } = atelier(fakeWorld().fake);
     const { services } = (await (await app.request('/catalog')).json()) as {
-      services: {
-        name: string;
-        does: string;
-        examples: string[];
-        writes?: { kind: string };
-        input: { properties: object };
-      }[];
+      services: { name: string; does: string; examples: string[]; ready: boolean }[];
     };
-    expect(services.map((one) => one.name)).toEqual(['offres_emploi', 'lire_page', 'pdf']);
-    expect(services[0]).toMatchObject({
-      writes: { kind: 'Offre', match: 'url' },
-      long: true,
-      effect: 'reads',
-      ready: true,
-    });
-    expect(services.every((one) => one.does && one.examples.length)).toBe(true);
-    expect(Object.keys(services[0]!.input.properties)).toContain('entries');
+    expect(services.map((one) => one.name)).toEqual(['chercher', 'parcourir', 'pdf']);
+    expect(services.every((one) => one.does && one.examples.length && one.ready)).toBe(true);
   });
 
   it('asks a key for work', async () => {
     const { app } = atelier(fakeWorld().fake);
-    expect((await call(app, '/jobs/offres_emploi', {}, 'wrong')).status).toBe(401);
+    expect((await call(app, '/jobs/chercher', {}, 'wrong')).status).toBe(401);
     expect((await call(app, '/jobs/nothing', {})).status).toBe(404);
   });
 
-  it('finds offers now, once each', async () => {
+  it('searches the web, within a site if asked', async () => {
     const world = fakeWorld();
     const { app } = atelier(world.fake);
-    const answer = await call(app, '/jobs/offres_emploi', {
-      query: 'stage IA',
-      contract: 'internship',
+    const answer = await call(app, '/jobs/chercher', {
+      queries: ['stage IA Normandie'],
+      site: 'welcometothejungle.com',
     });
-    expect(answer.status).toBe(200);
-    const { items } = (await answer.json()) as { items: { url: string; score: number }[] };
-    expect(items.map((one) => one.url).sort()).toEqual(['https://ex.com/1', 'https://ex.com/2']);
-    expect(items.every((one) => typeof one.score === 'number')).toBe(true);
-    expect(world.asked[0]).toMatchObject({
-      url: 'https://treg.to/call/anyapi.linkedin.search.jobs',
-      body: { query: 'stage IA', location: 'France', employmentType: 'internship' },
-    });
+    const { items } = (await answer.json()) as { items: { source: string }[] };
+    expect(items.map((one) => one.source)).toEqual(['welcometothejungle.com', 'fr.indeed.com']);
+    expect(world.asked[0]!.url).toContain('q=stage+IA+Normandie+site%3Awelcometothejungle.com');
+    expect(world.asked[0]!.url).toContain('format=json');
   });
 
-  it('does long work for Jarvis and sends it back with its token', async () => {
+  it('applies a recipe to each source and each of her searches, structured and scored', async () => {
     const world = fakeWorld();
     const { app, queue } = atelier(world.fake);
-    const answer = await call(app, '/jobs/offres_emploi', {
-      entries: [
+    const answer = await call(app, '/jobs/parcourir', {
+      sources: [
         {
-          title: 'Mes critères',
-          poste: 'stage intelligence artificielle',
-          lieu: 'Rouen',
-          contrat: 'Stage',
+          title: 'Site d’offres',
+          url: 'https://jobs.example.com/search?q={poste}&l={lieu}',
+          recipe: JSON.stringify({
+            js: true,
+            schema: {
+              base: '.job',
+              fields: { title: 'h2', url: 'a@href', company: '.org', when: 'time' },
+            },
+            rename: { published: 'when' },
+          }),
+        },
+        {
+          title: 'LinkedIn',
+          recipe: { treg: { route: 'anyapi.linkedin.search.jobs', body: { query: '{poste}' } } },
         },
       ],
-      jarvis: {
-        execution: 'ent_exe',
-        token: 'jos_work',
-        url: 'https://jarvis.test/api',
-        save: { kind: 'Offre de stage', match: 'url' },
-      },
+      searches: [
+        {
+          title: 'Stage IA',
+          poste: 'stage intelligence artificielle',
+          lieu: 'Rouen',
+          mots: 'intelligence artificielle|IA|machine learning',
+        },
+      ],
+      jarvis: work({ kind: 'JobOffer', match: 'url', title: '{title} — {company}' }),
     });
     expect(answer.status).toBe(202);
     const { job } = (await answer.json()) as { job: string };
-    for (let i = 0; i < 50 && queue.get(job)?.state !== 'done'; i++)
-      await new Promise((done) => setTimeout(done, 10));
-    expect(queue.get(job)).toMatchObject({ state: 'done', count: 2, execution: 'ent_exe' });
+    expect(await until(queue, job)).toMatchObject({ state: 'done', count: 3 });
+    const crawl = world.asked.find((one) => one.url.endsWith('/crawl'))!;
+    expect((crawl.body as { urls: string[] }).urls).toEqual([
+      'https://jobs.example.com/search?q=stage%20intelligence%20artificielle&l=Rouen',
+    ]);
+    const treg = world.asked.find((one) => one.url.startsWith('https://treg.to/'))!;
+    expect(treg.body).toEqual({ query: 'stage intelligence artificielle' });
+    const received = world.asked.filter((one) => one.url.endsWith('/receive'));
+    expect(received).toHaveLength(1);
+    const sent = received[0]!.body as { kind: string; items: Record<string, unknown>[] };
+    expect(sent.kind).toBe('JobOffer');
+    expect(sent.items[0]).toMatchObject({
+      title: 'Stage IA',
+      url: 'https://jobs.example.com/offre/1',
+      company: 'Exemple',
+      published: '2026-11-12',
+      source: 'jobs.example.com',
+      score: 100,
+    });
+    expect(sent.items.map((one) => one.title)).toEqual([
+      'Stage IA',
+      'Stage Machine Learning',
+      'Stage comptable',
+    ]);
+  });
+
+  it('keeps raw what no schema structured, as a « Capture » for the AI', async () => {
+    const world = fakeWorld();
+    const { app, queue } = atelier(world.fake);
+    const answer = await call(app, '/jobs/parcourir', {
+      url: 'https://ex.com/offre',
+      jarvis: work({ kind: 'JobOffer', match: 'url' }),
+    });
+    const { job } = (await answer.json()) as { job: string };
+    expect(await until(queue, job)).toMatchObject({ state: 'done', count: 1 });
     const toJarvis = world.asked.filter((one) => one.url.startsWith('https://jarvis.test'));
     expect(toJarvis.map((one) => one.url)).toEqual([
       'https://jarvis.test/api/receive',
       'https://jarvis.test/api/executions/ent_exe',
     ]);
-    expect(toJarvis.every((one) => one.auth === 'Bearer jos_work')).toBe(true);
     expect(toJarvis[0]!.body).toMatchObject({
-      kind: 'Offre de stage',
+      kind: 'Capture',
       match: 'url',
-      execution: 'ent_exe',
+      items: [
+        { title: 'Une offre', url: 'https://ex.com/offre', source: 'ex.com', text: 'Stage & IA' },
+      ],
     });
-    expect(toJarvis[1]!.body).toMatchObject({ status: 'done', counts: { found: 2, created: 2 } });
-    expect(world.asked[0]!.body).toMatchObject({
-      query: 'stage intelligence artificielle',
-      location: 'Rouen',
-      employmentType: 'internship',
-    });
-  });
-
-  it('makes each service a tool of its MCP server', async () => {
-    const { app } = atelier(fakeWorld().fake);
-    const listed = await call(app, '/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' });
-    const { result } = (await listed.json()) as { result: { tools: { name: string }[] } };
-    expect(result.tools.map((one) => one.name)).toEqual(['offres_emploi', 'lire_page', 'pdf']);
-    const read = await call(app, '/mcp', {
-      jsonrpc: '2.0',
-      id: 2,
-      method: 'tools/call',
-      params: { name: 'lire_page', arguments: { url: 'https://ex.com/offre' } },
-    });
-    const text = ((await read.json()) as { result: { content: { text: string }[] } }).result
-      .content[0]!.text;
-    expect(JSON.parse(text).items[0]).toMatchObject({ title: 'Une offre', text: 'Stage & IA' });
-  });
-
-  it('adds France Travail when its keys are set, best offers first', async () => {
-    const world = fakeWorld();
-    const { app } = atelier(world.fake, { FT_CLIENT_ID: 'id', FT_CLIENT_SECRET: 'secret' });
-    const answer = await call(app, '/jobs/offres_emploi', {
-      query: 'intelligence artificielle',
-      location: 'Rouen',
-      contract: 'internship',
-    });
-    const { items } = (await answer.json()) as {
-      items: { source: string; score: number; reasons: string }[];
-    };
-    expect(items.map((one) => one.source)).toEqual(['francetravail', 'linkedin', 'linkedin']);
-    expect(items[0]).toMatchObject({ score: 100 });
-    expect(items[0]!.reasons).toContain('à Rouen');
-    expect((items[0] as unknown as { published: string }).published).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    const search = world.asked.find((one) => one.url.startsWith('https://api.francetravail.io/'))!;
-    expect(search.url).toContain('departement=76');
-    expect(search.auth).toBe('Bearer ft');
-  });
-
-  it('scores an offer against her search, with its reasons', () => {
-    const now = new Date('2026-11-14T08:00:00Z');
-    const search = { query: 'stage data science', location: 'Lyon', contract: undefined };
-    expect(
-      scoreOf(
-        { title: 'Data Science intern', location: 'Lyon, France', published: '2026-11-12' },
-        search,
-        now,
-      ),
-    ).toEqual({
-      score: 100,
-      reasons: ['le poste correspond', 'à Lyon', 'publiée il y a 2 j'],
-    });
-    expect(
-      scoreOf({ title: 'Comptable', location: 'Paris', published: null }, search, now).score,
-    ).toBe(0);
-  });
-
-  it('understands a title said in other words', () => {
-    const search = {
-      query: 'stage intelligence artificielle',
-      location: 'France',
-      contract: undefined,
-    };
-    for (const title of ['Stage Ingénieur Data/IA', 'AI Engineer Intern', 'Stage Machine Learning'])
-      expect(scoreOf({ title, location: null, published: null }, search).reasons).toEqual([
-        'le poste correspond',
-      ]);
-    expect(scoreOf({ title: 'Stage média', location: null, published: null }, search).score).toBe(
-      20,
-    );
-    expect(ideasOf('développeur web Lyon')).toEqual([
-      expect.arrayContaining(['developer']),
-      ['web'],
-      ['lyon'],
-    ]);
+    expect(toJarvis[1]!.body).toMatchObject({ status: 'done', counts: { found: 1, raw: 1 } });
+    expect(toJarvis.every((one) => one.auth === 'Bearer jos_work')).toBe(true);
   });
 
   it('makes a PDF and keeps it in Jarvis as her file, linked to the work', async () => {
@@ -261,11 +227,8 @@ describe('the Atelier', () => {
       html: '<h1>Madame, Monsieur</h1><p>…</p>',
       jarvis: { execution: 'ent_exe', token: 'jos_work', url: 'https://jarvis.test/api' },
     });
-    expect(answer.status).toBe(202);
     const { job } = (await answer.json()) as { job: string };
-    for (let i = 0; i < 50 && queue.get(job)?.state !== 'done'; i++)
-      await new Promise((done) => setTimeout(done, 10));
-    expect(queue.get(job)).toMatchObject({ state: 'done', count: 1 });
+    expect(await until(queue, job)).toMatchObject({ state: 'done', count: 1 });
     const toJarvis = world.asked.filter((one) => one.url.startsWith('https://jarvis.test'));
     expect(toJarvis.map((one) => one.url)).toEqual([
       'https://jarvis.test/api/files',
@@ -274,10 +237,23 @@ describe('the Atelier', () => {
     const sent = toJarvis[0]!.body as Record<string, unknown>;
     expect((sent.file as File).name).toBe('Lettre-de-motivation-Exemple.pdf');
     expect(JSON.parse(String(sent.links))).toEqual([{ to: 'ent_exe', role: 'made_by' }]);
-    expect(toJarvis[1]!.body).toMatchObject({ status: 'done', counts: { created: 1 } });
   });
 
-  it('reads only public https pages', () => {
+  it('makes each service a tool of its MCP server', async () => {
+    const { app } = atelier(fakeWorld().fake);
+    const listed = await call(app, '/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' });
+    const { result } = (await listed.json()) as { result: { tools: { name: string }[] } };
+    expect(result.tools.map((one) => one.name)).toEqual(['chercher', 'parcourir', 'pdf']);
+  });
+
+  it('fills a recipe, scores her words, reads only public https pages', () => {
+    expect(
+      fill('https://s.com/?q={poste}&l={lieu}', { poste: 'data & IA', lieu: 'Rouen' }, true),
+    ).toBe('https://s.com/?q=data%20%26%20IA&l=Rouen');
+    expect(
+      pertinence('Stage Ingénieur Data/IA', ['intelligence artificielle|IA', 'Rouen']),
+    ).toEqual({ score: 50, reasons: '1/2 : intelligence artificielle' });
+    expect(pertinence('Stage média', ['IA']).score).toBe(0);
     expect(readable(new URL('https://example.com/a'))).toBe(true);
     for (const inside of [
       'http://example.com',

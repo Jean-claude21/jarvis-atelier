@@ -22,25 +22,27 @@ they run beside the Atelier as containers on the same server, and a service call
 - Jarvis side: the « Candidatures » app declares the capabilities it uses; Jarvis reaches the
   Atelier itself, and Claude runs a capability through Jarvis's own MCP.
 
-## 0.2.x — More offers
+## 0.3 — Generic gestures ✅
 
-- Indeed / Glassdoor France through **JobSpy** (open source, its own container), a school's job
-  board.
+- No trade in the Atelier: `chercher` (SearXNG), `parcourir` (a recipe written by the AI: Crawl4AI,
+  a plain request or treg), `pdf` (Gotenberg). `offres_emploi` and `lire_page` are gone.
+- One shape back for every service: structured items become her kind, raw ones « Capture ».
 
-## 0.3 — Mail
+## 0.4 — Mail
 
 - `envoyer_mail`: a mail sent through her own SMTP (Proton, kete.digital), only after her yes in
   Jarvis.
 - Replies read: mail forwarded to Jarvis's own address (Cloudflare Email Routing on a sub-domain)
   and filed — no access to her personal mailbox.
 
-## 0.4 — Reading the web harder
+## 0.5 — Watching and understanding
 
-- `lire_page` with a real browser for pages built by script: **Browserless** / **Playwright**
-  (container), **Crawl4AI** for clean Markdown.
+- `surveiller`: a page watched for changes (**changedetection.io**).
+- `comprendre`: a PDF, a scan, a Word file read into structured text (**Docling**).
+- `prevenir`: notifications to her phone and apps (**Apprise** / **ntfy**).
 - Limits per caller: work at once, work per day, time per job.
 
-## 0.5 — For everyone
+## 0.6 — For everyone
 
 - A service activated in one click from Jarvis (its catalogue read, her consent, the rule made).
 - A key per Jarvis account; a connection of hers lent for the work through Jarvis

@@ -1,0 +1,25 @@
+# SearXNG (open source, AGPL), the web search the `chercher` service asks — on the server's own
+# network, never public: many engines at once, nothing tracked, no paid key. JSON answers on.
+services:
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      - SEARXNG_SECRET=${SERVICE_PASSWORD_64_SEARXNG}
+      - SEARXNG_BASE_URL=http://searxng:8080/
+    volumes:
+      - type: bind
+        source: ./settings.yml
+        target: /etc/searxng/settings.yml
+        content: |
+          use_default_settings: true
+          server:
+            limiter: false
+            image_proxy: false
+            public_instance: false
+          search:
+            safe_search: 0
+            formats:
+              - html
+              - json
