@@ -291,7 +291,8 @@ export const parcourir = service({
       });
     for (const source of input.sources ?? []) {
       // A source she put on pause (`active: false`): a site she opens herself — kept, never read.
-      if (source.active === false) continue;
+      // One with neither address nor recipe is not a site (her notes may share the kind's name).
+      if (source.active === false || (!source.url && !source.recipe)) continue;
       try {
         recipes.push({
           name: String(source.title ?? source.url ?? 'source'),
