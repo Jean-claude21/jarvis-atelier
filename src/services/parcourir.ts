@@ -290,6 +290,8 @@ export const parcourir = service({
         recipe: recipeSchema.parse({ ...input.recipe, ...(input.url ? { url: input.url } : {}) }),
       });
     for (const source of input.sources ?? []) {
+      // A source she put on pause (`active: false`): a site she opens herself — kept, never read.
+      if (source.active === false) continue;
       try {
         recipes.push({
           name: String(source.title ?? source.url ?? 'source'),

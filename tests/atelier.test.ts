@@ -151,6 +151,7 @@ describe('the Atelier', () => {
             rename: { published: 'when' },
           }),
         },
+        { title: 'Indeed', url: 'https://fr.indeed.com/jobs?q={poste}', active: false },
         {
           title: 'LinkedIn',
           recipe: { treg: { route: 'anyapi.linkedin.search.jobs', body: { query: '{poste}' } } },
@@ -173,6 +174,8 @@ describe('the Atelier', () => {
     expect((crawl.body as { urls: string[] }).urls).toEqual([
       'https://jobs.example.com/search?q=stage%20intelligence%20artificielle&l=Rouen',
     ]);
+    // A source on pause is a site she opens herself: never read.
+    expect(world.asked.some((one) => one.url.includes('indeed'))).toBe(false);
     const treg = world.asked.find((one) => one.url.startsWith('https://treg.to/'))!;
     expect(treg.body).toEqual({ query: 'stage intelligence artificielle' });
     const received = world.asked.filter((one) => one.url.endsWith('/receive'));
