@@ -54,14 +54,15 @@ pnpm install
 ATELIER_KEYS=a-long-random-key TREG_TOKEN=… pnpm dev
 ```
 
-| Variable        |                                                                                    |
-| --------------- | ---------------------------------------------------------------------------------- |
-| `ATELIER_KEYS`  | Keys allowed to ask for work, comma separated (Bearer). Without one, nothing runs. |
-| `SEARXNG_URL`   | For `chercher`: SearXNG on the server's network (`deploy/searxng`).                |
-| `CRAWL4AI_URL`  | For `parcourir` on pages built by script or with a schema (`deploy/crawl4ai`).     |
-| `GOTENBERG_URL` | For `pdf`: Gotenberg on the server's network (`deploy/gotenberg`).                 |
-| `TREG_TOKEN`    | For a recipe whose source has its API at treg.                                     |
-| `PORT`          | 3000 by default.                                                                   |
+| Variable         |                                                                                    |
+| ---------------- | ---------------------------------------------------------------------------------- |
+| `ATELIER_KEYS`   | Keys allowed to ask for work, comma separated (Bearer). Without one, nothing runs. |
+| `SEARXNG_URL`    | For `chercher`: SearXNG on the server's network (`deploy/searxng`).                |
+| `CRAWL4AI_URL`   | For `parcourir` on pages built by script or with a schema (`deploy/crawl4ai`).     |
+| `CRAWL4AI_TOKEN` | The token Crawl4AI and the Atelier share (Crawl4AI listens to no one without it).  |
+| `GOTENBERG_URL`  | For `pdf`: Gotenberg on the server's network (`deploy/gotenberg`).                 |
+| `TREG_TOKEN`     | For a recipe whose source has its API at treg.                                     |
+| `PORT`           | 3000 by default.                                                                   |
 
 Deployed with Docker (`Dockerfile`) on Coolify. `pnpm check` runs lint, types, format and tests.
 

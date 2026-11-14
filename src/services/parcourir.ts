@@ -149,7 +149,10 @@ async function crawl(url: string, recipe: Recipe, { fetch, env, signal }: Contex
     : {};
   const answer = await fetch(`${base}/crawl`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      ...(env.CRAWL4AI_TOKEN ? { authorization: `Bearer ${env.CRAWL4AI_TOKEN}` } : {}),
+    },
     body: JSON.stringify({
       urls: [url],
       browser_config: { type: 'BrowserConfig', params: { headless: true } },

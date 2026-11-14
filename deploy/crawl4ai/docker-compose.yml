@@ -1,10 +1,12 @@
 # Crawl4AI (open source, Apache 2.0), the page reader the `parcourir` service asks for pages built
 # by script and for extracting a list by its CSS schema — a headless browser on the server's own
 # network, never public, held to 2 GB so it never starves the other apps. The Atelier only sends it
-# public https addresses.
+# public https addresses, with the token both share (without one, Crawl4AI listens to no one).
 services:
   crawl4ai:
     image: unclecode/crawl4ai:latest
     restart: unless-stopped
     shm_size: 1g
     mem_limit: 2g
+    environment:
+      - CRAWL4AI_API_TOKEN=${CRAWL4AI_API_TOKEN}
