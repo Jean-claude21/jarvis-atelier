@@ -6,6 +6,9 @@ import type { Context, Item, JarvisWork, Outcome, Service } from './contract';
 // closed (`/executions/:id`), done or failed. Nothing is kept here once it is sent: Jarvis is the
 // place where things are kept. A job is remembered a day, for whoever asks how it went.
 
+/** Jarvis takes at most 50 entries per /receive: larger findings go in batches. */
+const RECEIVE_BATCH = 50;
+
 export type JobState = 'queued' | 'running' | 'done' | 'failed';
 
 export interface Job {
@@ -128,10 +131,10 @@ export async function answerJarvis(
     ];
     for (const [kind, items, title] of groups) {
       // Jarvis takes 200 at a time.
-      for (let at = 0; at < items.length; at += 200) {
+      for (let at = 0; at < items.length; at += RECEIVE_BATCH) {
         const got = await post('/receive', {
           kind,
-          items: items.slice(at, at + 200),
+          items: items.slice(at, at + RECEIVE_BATCH),
           ...(writes.match ? { match: writes.match } : {}),
           ...(title ? { title } : {}),
           execution: work.execution,
