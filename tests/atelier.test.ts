@@ -152,6 +152,7 @@ describe('the Atelier', () => {
           }),
         },
         { title: 'Indeed', url: 'https://fr.indeed.com/jobs?q={poste}', active: false },
+        { title: 'Une note', text: 'Pas un site' },
         {
           title: 'LinkedIn',
           recipe: { treg: { route: 'anyapi.linkedin.search.jobs', body: { query: '{poste}' } } },
