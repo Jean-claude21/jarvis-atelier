@@ -24,6 +24,9 @@ export interface Job {
 
 const KEEP_MS = 24 * 3_600_000;
 const RUNNING_AT_ONCE = 2;
+const ATTEMPTS = 3;
+/** Waited before a new try: this, then twice this. */
+export const RETRY_MS = { value: 5_000 };
 
 /** Sends what a service found to Jarvis, then closes its execution. */
 export async function answerJarvis(
@@ -34,12 +37,21 @@ export async function answerJarvis(
 ): Promise<void> {
   const base = work.url.replace(/\/$/, '');
   const headers = { authorization: `Bearer ${work.token}`, 'content-type': 'application/json' };
+  /** A request to Jarvis, tried three times when the network fails (never when Jarvis refuses). */
+  const send = async (path: string, init: RequestInit): Promise<Response> => {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await fetcher(`${base}${path}`, { ...init, signal: AbortSignal.timeout(60_000) });
+      } catch (error) {
+        const cause = (error as { cause?: { code?: string; message?: string } }).cause;
+        const why = `${(error as Error).message}${cause ? ` (${cause.code ?? cause.message})` : ''}`;
+        if (attempt >= ATTEMPTS) throw new Error(`Jarvis could not be reached on ${path}: ${why}`);
+        await new Promise((done) => setTimeout(done, RETRY_MS.value * attempt));
+      }
+    }
+  };
   const post = async (path: string, body: unknown) => {
-    const answer = await fetcher(`${base}${path}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
+    const answer = await send(path, { method: 'POST', headers, body: JSON.stringify(body) });
     if (!answer.ok) {
       // Its own words, a few: what to fix (never the token, which is not in them).
       const said = (await answer.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
@@ -63,7 +75,7 @@ export async function answerJarvis(
       );
       if (file.title) form.append('title', file.title);
       form.append('links', JSON.stringify([{ to: work.execution, role: 'made_by' }]));
-      const answer = await fetcher(`${base}/files`, {
+      const answer = await send('/files', {
         method: 'POST',
         headers: { authorization: headers.authorization },
         body: form,
@@ -151,6 +163,9 @@ export function jobQueue(context: () => Omit<Context, 'signal'>) {
           } catch (error) {
             job.state = 'failed';
             job.error = `Not delivered to Jarvis: ${(error as Error).message}`;
+            // Its execution closed failed, with why, rather than left waiting for its time to pass.
+            if (work && !('error' in outcome))
+              await answerJarvis(ctx.fetch, work, service, { error: job.error }).catch(() => {});
           }
           job.endedAt = new Date().toISOString();
           // One line per job, never its content or its token.
