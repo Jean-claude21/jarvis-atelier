@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { makeApp } from '../src/app';
 import { textOf, readable } from '../src/services/lire-page';
 import { SERVICES } from '../src/services';
-import { scoreOf } from '../src/services/offres-emploi';
+import { ideasOf, scoreOf } from '../src/services/offres-emploi';
 
 // The Atelier from outside: its catalogue, a key needed for work, work done now, long work sent to
 // Jarvis with its token (a fake Jarvis records what came), and each service as an MCP tool.
@@ -226,11 +226,31 @@ describe('the Atelier', () => {
       ),
     ).toEqual({
       score: 100,
-      reasons: ['2/2 mots du poste dans le titre', 'à Lyon', 'publiée il y a 2 j'],
+      reasons: ['le poste correspond', 'à Lyon', 'publiée il y a 2 j'],
     });
     expect(
       scoreOf({ title: 'Comptable', location: 'Paris', published: null }, search, now).score,
     ).toBe(0);
+  });
+
+  it('understands a title said in other words', () => {
+    const search = {
+      query: 'stage intelligence artificielle',
+      location: 'France',
+      contract: undefined,
+    };
+    for (const title of ['Stage Ingénieur Data/IA', 'AI Engineer Intern', 'Stage Machine Learning'])
+      expect(scoreOf({ title, location: null, published: null }, search).reasons).toEqual([
+        'le poste correspond',
+      ]);
+    expect(scoreOf({ title: 'Stage média', location: null, published: null }, search).score).toBe(
+      20,
+    );
+    expect(ideasOf('développeur web Lyon')).toEqual([
+      expect.arrayContaining(['developer']),
+      ['web'],
+      ['lyon'],
+    ]);
   });
 
   it('makes a PDF and keeps it in Jarvis as her file, linked to the work', async () => {

@@ -35,7 +35,75 @@ export const dayOf = (value: string | null | undefined): string | null => {
 
 const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
 const fold = (one: string) => one.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-const SMALL = new Set(['les', 'des', 'une', 'pour', 'dans', 'avec', 'and', 'the', 'stage', 'h/f']);
+const SMALL = new Set([
+  'les',
+  'des',
+  'une',
+  'pour',
+  'dans',
+  'avec',
+  'and',
+  'the',
+  'en',
+  'de',
+  'du',
+  'stage',
+  'stagiaire',
+  'intern',
+  'internship',
+  'alternance',
+  'h/f',
+]);
+
+/**
+ * What a job title says in other words: an idea of her search counts when the title says it in
+ * any of these (« IA », « AI », « machine learning » for « intelligence artificielle »).
+ */
+const SAME: string[][] = [
+  [
+    'intelligence artificielle',
+    'artificial intelligence',
+    'ia',
+    'ai',
+    'machine learning',
+    'ml',
+    'deep learning',
+    'llm',
+    'genai',
+    'nlp',
+  ],
+  ['apprentissage automatique', 'machine learning', 'ml'],
+  ['data science', 'data scientist', 'machine learning', 'data'],
+  ['science des donnees', 'data science', 'data scientist', 'data'],
+  ['analyse de donnees', 'data analyst', 'data analysis', 'data'],
+  ['developpeur', 'developpeuse', 'developer', 'dev', 'software engineer', 'ingenieur logiciel'],
+  ['ressources humaines', 'rh', 'hr', 'human resources'],
+  ['marketing digital', 'digital marketing', 'growth'],
+  ['cybersecurite', 'cybersecurity', 'securite informatique', 'security'],
+];
+
+/** The ideas of a search: known phrases first (with their other words), then each word left. */
+export function ideasOf(query: string): string[][] {
+  let rest = ` ${fold(query).replace(/[^a-z0-9+#]+/g, ' ')} `;
+  const ideas: string[][] = [];
+  for (const same of SAME) {
+    const found = same.find((one) => rest.includes(` ${one} `));
+    if (!found || found.length < 4) continue;
+    ideas.push(same);
+    rest = rest.replace(` ${found} `, ' ');
+  }
+  for (const word of rest.split(' ')) {
+    if (word.length < 2 || SMALL.has(word)) continue;
+    ideas.push(SAME.find((same) => same.includes(word)) ?? [word]);
+  }
+  return ideas;
+}
+
+/** Whether a title says one of these words, as words (« ia » not inside « media »). */
+const says = (title: string, words: string[]) => {
+  const padded = ` ${fold(title).replace(/[^a-z0-9+#]+/g, ' ')} `;
+  return words.some((one) => padded.includes(` ${one} `));
+};
 
 interface Search {
   query: string | null;
@@ -51,14 +119,15 @@ export function scoreOf(
 ): { score: number; reasons: string[] } {
   const reasons: string[] = [];
   let score = 0;
-  const words = fold(search.query ?? '')
-    .split(/[^a-z0-9+#]+/)
-    .filter((one) => one.length >= 2 && !SMALL.has(one));
-  if (words.length) {
-    const title = fold(offer.title);
-    const hit = words.filter((one) => title.includes(one));
-    score += Math.round((60 * hit.length) / words.length);
-    reasons.push(`${hit.length}/${words.length} mots du poste dans le titre`);
+  const ideas = ideasOf(search.query ?? '');
+  if (ideas.length) {
+    const hit = ideas.filter((same) => says(offer.title, same));
+    score += Math.round((60 * hit.length) / ideas.length);
+    reasons.push(
+      hit.length === ideas.length
+        ? 'le poste correspond'
+        : `${hit.length}/${ideas.length} idées du poste dans le titre`,
+    );
   }
   if (search.location && fold(search.location) !== 'france') {
     const near = offer.location && fold(offer.location).includes(fold(search.location));
