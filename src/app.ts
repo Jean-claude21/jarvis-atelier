@@ -25,7 +25,26 @@ export function makeApp(settings: Settings) {
   const app = new Hono();
   const byName = new Map(settings.services.map((one) => [one.name, one]));
   const fetcher = settings.fetch ?? fetch;
-  const context = (): Omit<Context, 'signal'> => ({ fetch: fetcher, env: settings.env });
+  /** A fetch whose network failures say why (« fetch failed (ECONNREFUSED) »), never just « failed ». */
+  const said: typeof fetch = async (input, init) => {
+    try {
+      return await fetcher(input, init);
+    } catch (error) {
+      const cause = (error as { cause?: { code?: string; message?: string } }).cause;
+      if (!cause) throw error;
+      const host = (() => {
+        try {
+          return new URL(String(input instanceof Request ? input.url : input)).host;
+        } catch {
+          return '?';
+        }
+      })();
+      throw new Error(`${(error as Error).message} (${cause.code ?? cause.message}, ${host})`, {
+        cause,
+      });
+    }
+  };
+  const context = (): Omit<Context, 'signal'> => ({ fetch: said, env: settings.env });
   const queue = jobQueue(context);
   const allowed = settings.keys.filter(Boolean).map(digest);
 
