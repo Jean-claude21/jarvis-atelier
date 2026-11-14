@@ -121,7 +121,13 @@ describe('the Atelier', () => {
     const { services } = (await (await app.request('/catalog')).json()) as {
       services: { name: string; does: string; examples: string[]; ready: boolean }[];
     };
-    expect(services.map((one) => one.name)).toEqual(['chercher', 'parcourir', 'pdf', 'situer']);
+    expect(services.map((one) => one.name)).toEqual([
+      'chercher',
+      'lire',
+      'parcourir',
+      'pdf',
+      'situer',
+    ]);
     expect(services.every((one) => one.does && one.examples.length && one.ready)).toBe(true);
   });
 
@@ -262,7 +268,13 @@ describe('the Atelier', () => {
     const { app } = atelier(fakeWorld().fake);
     const listed = await call(app, '/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' });
     const { result } = (await listed.json()) as { result: { tools: { name: string }[] } };
-    expect(result.tools.map((one) => one.name)).toEqual(['chercher', 'parcourir', 'pdf', 'situer']);
+    expect(result.tools.map((one) => one.name)).toEqual([
+      'chercher',
+      'lire',
+      'parcourir',
+      'pdf',
+      'situer',
+    ]);
   });
 
   it('knows the same offer on several sites', () => {
@@ -285,6 +297,28 @@ describe('the Atelier', () => {
     expect(nearOf('Saint-Denis(à 10 km de Paris)')).toBe('Paris');
     expect(nearOf('Paris 9ème')).toBeNull();
     expect(townOf('Paris 9ème')).toBe('Paris');
+  });
+
+  it('reads pages whole and puts their text in one field', async () => {
+    const world = fakeWorld();
+    const { app, queue } = atelier(world.fake);
+    const answer = await call(app, '/jobs/lire', {
+      pages: [{ title: 'Stage IA', url: 'https://jobs.example.com/offre/1' }],
+      jarvis: work({ kind: 'JobOffer', match: 'url' }),
+    });
+    const { job } = (await answer.json()) as { job: string };
+    expect(await until(queue, job)).toMatchObject({ state: 'done', count: 1 });
+    const crawl = world.asked.find((one) => one.url.endsWith('/crawl'))!;
+    expect((crawl.body as { urls: string[] }).urls).toEqual(['https://jobs.example.com/offre/1']);
+    const sent = world.asked.find((one) => one.url.endsWith('/receive'))!.body as {
+      kind: string;
+      items: Record<string, unknown>[];
+    };
+    expect(sent.kind).toBe('JobOffer');
+    expect(sent.items[0]).toMatchObject({
+      url: 'https://jobs.example.com/offre/1',
+      contenu: '# Résultats',
+    });
   });
 
   it('places towns on a map', async () => {
