@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { Context, JarvisWork, Outcome, Service } from './contract';
+import type { Context, Item, JarvisWork, Outcome, Service } from './contract';
 
 // Long work: accepted at once (202), done in the background a few at a time, and its result sent
 // to Jarvis with the work token Jarvis gave — what was found to `/receive`, then the execution
@@ -19,10 +19,29 @@ export interface Job {
   /** The execution of Jarvis it answers for, if any. */
   execution?: string;
   /** What was found, kept a day for a caller without Jarvis (an assistant asking later). */
-  items?: Record<string, unknown>[];
+  items?: Item[];
 }
 
 const KEEP_MS = 24 * 3_600_000;
+/** Where what could not be structured is kept, as read, when her rule says nothing. */
+export const RAW_KIND = 'Capture';
+
+/** A structured item as an entry of her kind: its fields by name, beside its title and address. */
+export const entryOf = (item: Item): Record<string, unknown> => ({
+  title: item.title,
+  ...(item.url ? { url: item.url } : {}),
+  source: item.source,
+  ...(item.score !== undefined ? { score: item.score, reasons: item.reasons ?? null } : {}),
+  ...item.fields,
+});
+
+/** A raw item as a « Capture »: what was read, where, to be filed later. */
+export const captureOf = (item: Item): Record<string, unknown> => ({
+  title: item.title,
+  ...(item.url ? { url: item.url } : {}),
+  source: item.source,
+  text: (item.text ?? '').slice(0, 50_000),
+});
 const RUNNING_AT_ONCE = 2;
 const ATTEMPTS = 3;
 /** Waited before a new try: this, then twice this. */
@@ -87,21 +106,31 @@ export async function answerJarvis(
     }
     counts = { ...counts, created: outcome.files.length };
   }
-  // Her rule says where it goes; the service's own idea only when it says nothing.
+  // Her rule says where it goes; the service's own idea only when it says nothing. What was
+  // structured becomes her kind (its fields by name); what was not is kept raw, for the AI.
   const writes = work.save ?? service.writes;
   if (writes && outcome.items.length && !outcome.files?.length) {
-    // Jarvis takes 200 at a time.
-    for (let at = 0; at < outcome.items.length; at += 200) {
-      const got = await post('/receive', {
-        kind: writes.kind,
-        items: outcome.items.slice(at, at + 200),
-        ...(writes.match ? { match: writes.match } : {}),
-        ...(writes.title ? { title: writes.title } : {}),
-        execution: work.execution,
-      });
-      for (const name of ['created', 'updated', 'skipped'])
-        counts = { ...counts, [name]: (counts[name] ?? 0) + Number(got[name] ?? 0) };
+    const structured = outcome.items.filter((one) => one.fields);
+    const raw = outcome.items.filter((one) => !one.fields);
+    const groups: [string, Record<string, unknown>[], string | undefined][] = [
+      [writes.kind, structured.map(entryOf), writes.title],
+      [writes.raw ?? RAW_KIND, raw.map(captureOf), undefined],
+    ];
+    for (const [kind, items, title] of groups) {
+      // Jarvis takes 200 at a time.
+      for (let at = 0; at < items.length; at += 200) {
+        const got = await post('/receive', {
+          kind,
+          items: items.slice(at, at + 200),
+          ...(writes.match ? { match: writes.match } : {}),
+          ...(title ? { title } : {}),
+          execution: work.execution,
+        });
+        for (const name of ['created', 'updated', 'skipped'])
+          counts = { ...counts, [name]: (counts[name] ?? 0) + Number(got[name] ?? 0) };
+      }
     }
+    if (raw.length) counts = { ...counts, raw: raw.length };
   }
   await post(`/executions/${work.execution}`, {
     status: 'done',

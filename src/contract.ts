@@ -3,14 +3,38 @@ import { z } from 'zod';
 // The contract of a service of the Atelier: what it is called, what it takes, what it gives back
 // and where that goes in Jarvis. A service is one file under `src/services/`; the registry makes it
 // an API route, an MCP tool and a line of the catalogue — nothing else is written for it.
+//
+// ONE shape comes back from every service: a list of `Item`s. An item is either structured (its
+// `fields` were extracted: they become the fields of an entry of her kind, by name) or raw (only
+// its `text`: kept as a « Capture » for the AI to read and file later). Jarvis needs nothing else
+// to receive what any service finds.
 
 /** Where what a service found goes in Jarvis: entries of `kind`, found again by `match`. */
 export interface Writes {
   kind: string;
+  /** Where raw items go (no fields extracted): « Capture » by default. */
+  raw?: string;
   /** A field whose value finds the entry already there (« url »): never twice. */
   match?: string;
   /** Each entry's title: « {title} — {company} ». */
   title?: string;
+}
+
+/** What every service gives back, one per thing found: a page, a result, an element of a list. */
+export interface Item {
+  /** What it is called: a page's title, an offer's title. */
+  title: string;
+  /** Its address: found again by it, never twice. */
+  url?: string;
+  /** Where it was found: the host (« fr.indeed.com »), or the route (« treg: linkedin »). */
+  source: string;
+  /** Its content as read (Markdown), when no fields were extracted — or as well. */
+  text?: string;
+  /** What was extracted (« company », « location », « published »…): her model's field names. */
+  fields?: Record<string, unknown>;
+  /** How well it answers her words, out of 100, and why — when she gave words. */
+  score?: number;
+  reasons?: string;
 }
 
 /** What Jarvis sends with long work (spec 057 of Jarvis OS): where to answer, and with what. */
@@ -25,6 +49,8 @@ export const jarvisWorkSchema = z.object({
       kind: z.string().min(1).max(80),
       match: z.string().min(1).max(60).optional(),
       title: z.string().min(1).max(300).optional(),
+      /** Where what could not be structured goes, as read (« Capture »). */
+      raw: z.string().min(1).max(80).optional(),
     })
     .optional(),
 });
@@ -41,7 +67,7 @@ export interface MadeFile {
 
 /** What a service gives back: the items found (written in Jarvis per `writes`), and a few words. */
 export interface Outcome {
-  items: Record<string, unknown>[];
+  items: Item[];
   /** The files it made, sent to Jarvis's `/files` for long work. */
   files?: MadeFile[];
   log?: string;
@@ -62,7 +88,7 @@ export interface Context {
 }
 
 export interface Service<Shape extends z.ZodRawShape = z.ZodRawShape> {
-  /** Its address and tool name: `offres_emploi` (letters, digits, `_`). */
+  /** Its address and tool name: `parcourir` (letters, digits, `_`). */
   name: string;
   title: string;
   /** What it does, for a model choosing a tool (English, precise). */

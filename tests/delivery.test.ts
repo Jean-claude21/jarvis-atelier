@@ -25,7 +25,9 @@ function network(failures: number) {
 describe('sending to Jarvis', () => {
   it('tries again when the network fails', async () => {
     const { asked, fake } = network(2);
-    await answerJarvis(fake, work, offers, { items: [{ url: 'https://ex.com/1' }] });
+    await answerJarvis(fake, work, offers, {
+      items: [{ title: 'x', source: 's', url: 'https://ex.com/1', fields: {} }],
+    });
     expect(asked).toEqual([
       'https://jarvis.test/api/receive',
       'https://jarvis.test/api/receive',
@@ -37,7 +39,9 @@ describe('sending to Jarvis', () => {
   it('says why when it never gets through', async () => {
     const { fake } = network(5);
     await expect(
-      answerJarvis(fake, work, offers, { items: [{ url: 'https://ex.com/1' }] }),
+      answerJarvis(fake, work, offers, {
+        items: [{ title: 'x', source: 's', url: 'https://ex.com/1', fields: {} }],
+      }),
     ).rejects.toThrow('Jarvis could not be reached on /receive: fetch failed (ECONNRESET)');
   });
 });
