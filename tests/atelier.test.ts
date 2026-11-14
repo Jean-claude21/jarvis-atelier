@@ -209,6 +209,7 @@ describe('the Atelier', () => {
     expect(items.map((one) => one.source)).toEqual(['francetravail', 'linkedin', 'linkedin']);
     expect(items[0]).toMatchObject({ score: 100 });
     expect(items[0]!.reasons).toContain('à Rouen');
+    expect((items[0] as unknown as { published: string }).published).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     const search = world.asked.find((one) => one.url.startsWith('https://api.francetravail.io/'))!;
     expect(search.url).toContain('departement=76');
     expect(search.auth).toBe('Bearer ft');
