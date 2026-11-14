@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { makeApp } from '../src/app';
 import { SERVICES } from '../src/services';
 import { fill, sameOf, typesOf } from '../src/services/parcourir';
-import { townOf } from '../src/place';
+import { nearOf, townOf } from '../src/place';
 import { pertinence, readable, textOf } from '../src/web';
 
 // The Atelier from outside: its catalogue of generic gestures, a key needed for work, a search, a
@@ -282,6 +282,9 @@ describe('the Atelier', () => {
     expect(townOf('Palaiseau(à 18 km de Paris)')).toBe('Palaiseau');
     expect(townOf('Paris, Île-de-France, France')).toBe('Paris');
     expect(townOf('76 - ST MARTIN DU VIVIER')).toBe('ST MARTIN DU VIVIER');
+    expect(nearOf('Saint-Denis(à 10 km de Paris)')).toBe('Paris');
+    expect(nearOf('Paris 9ème')).toBeNull();
+    expect(townOf('Paris 9ème')).toBe('Paris');
   });
 
   it('places towns on a map', async () => {
