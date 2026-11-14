@@ -11,14 +11,21 @@ they run beside the Atelier as containers on the same server, and a service call
 - Keys (Bearer), Docker image, CI.
 - Services: `offres_emploi` (LinkedIn through treg), `lire_page`.
 
-## 0.2 — Applications (« Candidatures »)
+## 0.2 — Capabilities and « Candidatures » ✅
 
-- `offres_emploi`: more sources — France Travail's official API (free, register at
-  francetravail.io), Indeed / Glassdoor France through **JobSpy** (open source, its own container),
-  a school's job board. A score per offer against the profile, with its reasons.
-- `pdf`: an HTML page (a CV, a letter) made a PDF by **Gotenberg** (open source container).
-- Jarvis side: the « Candidatures » app (Offre, Candidature, Profil de recherche, relances as
-  activities) and the daily rule calling `offres_emploi`.
+- Each service says what it can do in her words (`does`, `examples`, `effect`): Jarvis picks them,
+  she never names one.
+- `offres_emploi`: France Travail's official API beside LinkedIn; a score per offer with its
+  reasons, best first.
+- `pdf`: an HTML page (a CV, a letter) made a PDF by **Gotenberg** (open source container on the
+  server's network), kept in Jarvis as her file.
+- Jarvis side: the « Candidatures » app declares the capabilities it uses; Jarvis reaches the
+  Atelier itself, and Claude runs a capability through Jarvis's own MCP.
+
+## 0.2.x — More offers
+
+- Indeed / Glassdoor France through **JobSpy** (open source, its own container), a school's job
+  board.
 
 ## 0.3 — Mail
 

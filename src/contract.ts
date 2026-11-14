@@ -30,11 +30,29 @@ export const jarvisWorkSchema = z.object({
 });
 export type JarvisWork = z.infer<typeof jarvisWorkSchema>;
 
+/** A file a service made (a PDF): kept in Jarvis as her file, linked to the work that made it. */
+export interface MadeFile {
+  name: string;
+  mediaType: string;
+  /** Its bytes, in base64. */
+  base64: string;
+  title?: string;
+}
+
 /** What a service gives back: the items found (written in Jarvis per `writes`), and a few words. */
 export interface Outcome {
   items: Record<string, unknown>[];
+  /** The files it made, sent to Jarvis's `/files` for long work. */
+  files?: MadeFile[];
   log?: string;
 }
+
+/**
+ * What a service does to the world: `reads` (finds, reads — nothing changes outside), `makes`
+ * (makes something of hers: a PDF), `sends` (acts outside in her name: a mail) — the last only after
+ * her yes in Jarvis.
+ */
+export type Effect = 'reads' | 'makes' | 'sends';
 
 /** What a service may use while it works: its own secrets, a fetch it can be given in tests. */
 export interface Context {
@@ -47,8 +65,16 @@ export interface Service<Shape extends z.ZodRawShape = z.ZodRawShape> {
   /** Its address and tool name: `offres_emploi` (letters, digits, `_`). */
   name: string;
   title: string;
-  /** What it does, for a person and for a model choosing a tool. */
+  /** What it does, for a model choosing a tool (English, precise). */
   description: string;
+  /**
+   * The capability in her words (« Trouver des offres d’emploi chaque jour ») — what Jarvis shows
+   * when it proposes a plan; nobody needs the service's name.
+   */
+  does: string;
+  /** Things a person says that this answers (« je cherche un stage en IA à Lyon »). */
+  examples: string[];
+  effect: Effect;
   input: z.ZodObject<Shape>;
   writes?: Writes;
   /** Minutes: work this long is answered later (202), then sent to Jarvis. */

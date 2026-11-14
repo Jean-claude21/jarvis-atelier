@@ -41,6 +41,9 @@ export function makeApp(settings: Settings) {
     settings.services.map((one) => ({
       name: one.name,
       title: one.title,
+      does: one.does,
+      examples: one.examples,
+      effect: one.effect,
       description: one.description,
       input: z.toJSONSchema(one.input),
       ...(one.writes ? { writes: one.writes } : {}),
@@ -100,7 +103,12 @@ export function makeApp(settings: Settings) {
     for (const one of settings.services) {
       server.registerTool(
         one.name,
-        { title: one.title, description: one.description, inputSchema: one.input.shape },
+        {
+          title: one.title,
+          description: `${one.description} (${one.does}.)`,
+          inputSchema: one.input.shape,
+          annotations: { readOnlyHint: one.effect === 'reads', openWorldHint: true },
+        },
         async (args: unknown) => {
           try {
             const outcome = await runNow(one, args);
