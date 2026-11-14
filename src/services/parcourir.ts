@@ -271,7 +271,7 @@ export const parcourir = service({
     url: z.string().url().max(2000).optional(),
     recipe: recipeSchema.optional(),
     /** Her sources (entries « Source »): each its address and recipe. */
-    sources: z.array(z.record(z.string(), z.unknown())).max(20).optional(),
+    sources: z.array(z.record(z.string(), z.unknown())).max(100).optional(),
     /** Her searches: each its values for the {placeholders}, and her words (`mots`). */
     searches: z.array(z.record(z.string(), z.unknown())).max(10).optional(),
     /** Her words, each an idea (« intelligence artificielle|IA|AI »): a score out of 100. */
