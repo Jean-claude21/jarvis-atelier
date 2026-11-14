@@ -52,9 +52,32 @@ export async function answerJarvis(
     return;
   }
   let counts: Record<string, number> = { found: outcome.items.length };
+  // A file it made (a PDF) is kept as her file, linked to the work that made it.
+  if (outcome.files?.length) {
+    for (const file of outcome.files) {
+      const form = new FormData();
+      form.append(
+        'file',
+        new Blob([Buffer.from(file.base64, 'base64')], { type: file.mediaType }),
+        file.name,
+      );
+      if (file.title) form.append('title', file.title);
+      form.append('links', JSON.stringify([{ to: work.execution, role: 'made_by' }]));
+      const answer = await fetcher(`${base}/files`, {
+        method: 'POST',
+        headers: { authorization: headers.authorization },
+        body: form,
+      });
+      if (!answer.ok) {
+        const said = (await answer.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+        throw new Error(`Jarvis answered ${answer.status} on /files: ${said}`);
+      }
+    }
+    counts = { ...counts, created: outcome.files.length };
+  }
   // Her rule says where it goes; the service's own idea only when it says nothing.
   const writes = work.save ?? service.writes;
-  if (writes && outcome.items.length) {
+  if (writes && outcome.items.length && !outcome.files?.length) {
     // Jarvis takes 200 at a time.
     for (let at = 0; at < outcome.items.length; at += 200) {
       const got = await post('/receive', {

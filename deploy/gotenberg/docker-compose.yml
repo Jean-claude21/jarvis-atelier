@@ -1,0 +1,14 @@
+# Gotenberg (open source, MIT), the PDF maker the `pdf` service calls — on the server's own network,
+# never public. Chromium runs without JavaScript and is denied every address but public https and
+# the page itself: a page cannot make it read the server's own network.
+services:
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    command:
+      - gotenberg
+      - --chromium-disable-javascript=true
+      - --chromium-allow-list=^(https://|file:///tmp/).*
+      - --chromium-deny-list=^https?://([^/.]+|localhost|127\.[^/]*|10\.[^/]*|192\.168\.[^/]*|172\.(1[6-9]|2[0-9]|3[01])\.[^/]*|169\.254\.[^/]*|[^/]*\.internal)(:[0-9]+)?(/.*)?$
+      - --api-timeout=60s
+      - --log-level=warn

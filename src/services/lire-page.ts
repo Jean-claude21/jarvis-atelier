@@ -48,6 +48,9 @@ export const lirePage = service({
   title: 'Lire une page',
   description:
     'Reads a public web page (https) and returns its title and its text, without scripts or styles — to read a job offer, an article, a company page.',
+  does: 'Lire une page web publique : une offre, un article, la page d’une entreprise',
+  examples: ['lis cette offre et dis-moi ce qu’ils demandent', 'que fait cette entreprise ?'],
+  effect: 'reads',
   input: z.object({
     url: z.string().url().max(2000),
   }),
